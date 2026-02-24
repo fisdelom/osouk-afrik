@@ -6,6 +6,16 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const DEFAULT_PRODUCTS = [
+  { id: 1, name: "Attiéké Frais", description: "Semoule de manioc fermentée, spécialité ivoirienne.", price: 25, category: "Féculents", image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80", in_stock: 1, promo_price: null },
+  { id: 2, name: "Igname", description: "Igname de qualité supérieure, idéal pour vos plats.", price: 35, category: "Légumes", image: "https://images.unsplash.com/photo-1595856461939-2fe8b6951214?w=500&q=80", in_stock: 1, promo_price: null },
+  { id: 3, name: "Banane Plantain", description: "Bananes plantains mûres ou vertes selon arrivage.", price: 20, category: "Légumes", image: "https://images.unsplash.com/photo-1528825871115-3581a5387919?w=500&q=80", in_stock: 1, promo_price: null },
+  { id: 4, name: "Piment Rouge", description: "Piments forts pour relever vos sauces.", price: 15, category: "Condiments", image: "https://images.unsplash.com/photo-1596662951482-0c4ba74a6df6?w=500&q=80", in_stock: 1, promo_price: null },
+  { id: 5, name: "Huile de Palme", description: "Huile de palme rouge naturelle.", price: 45, category: "Huilerie", image: "https://images.unsplash.com/photo-1620706857370-e1b9770e8bb1?w=500&q=80", in_stock: 1, promo_price: null },
+  { id: 6, name: "Poisson Salé", description: "Poisson séché et salé pour vos bouillons.", price: 60, category: "Protéines", image: "https://images.unsplash.com/photo-1498654200943-1088dd4438ae?w=500&q=80", in_stock: 1, promo_price: null },
+];
+
+
 // PostgreSQL connection pool (Railway injects DATABASE_URL automatically)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -46,22 +56,33 @@ async function initDB() {
   const count = parseInt(countResult.rows[0].count, 10);
 
   if (count === 0) {
-    const seedProducts = [
-      ["Attiéké Frais", "Semoule de manioc fermentée, spécialité ivoirienne.", 25, "Féculents", "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80"],
-      ["Igname", "Igname de qualité supérieure, idéal pour vos plats.", 35, "Légumes", "https://images.unsplash.com/photo-1595856461939-2fe8b6951214?w=500&q=80"],
-      ["Banane Plantain", "Bananes plantains mûres ou vertes selon arrivage.", 20, "Légumes", "https://images.unsplash.com/photo-1528825871115-3581a5387919?w=500&q=80"],
-      ["Piment Rouge", "Piments forts pour relever vos sauces.", 15, "Condiments", "https://images.unsplash.com/photo-1596662951482-0c4ba74a6df6?w=500&q=80"],
-      ["Huile de Palme", "Huile de palme rouge naturelle.", 45, "Huilerie", "https://images.unsplash.com/photo-1620706857370-e1b9770e8bb1?w=500&q=80"],
-      ["Poisson Salé", "Poisson séché et salé pour vos bouillons.", 60, "Protéines", "https://images.unsplash.com/photo-1498654200943-1088dd4438ae?w=500&q=80"],
-    ];
-    for (const p of seedProducts) {
+    for (const p of DEFAULT_PRODUCTS) {
       await pool.query(
-        "INSERT INTO products (name, description, price, category, image) VALUES ($1, $2, $3, $4, $5)",
-        p
+        "INSERT INTO products (name, description, price, category, image, in_stock, promo_price) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [p.name, p.description, p.price, p.category, p.image, p.in_stock, p.promo_price]
       );
     }
     console.log("✅ Products seeded successfully.");
   }
+}
+
+let dbReady = false;
+
+async function initializeDatabaseWithRetry(maxAttempts = 8, delayMs = 5000) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await initDB();
+      dbReady = true;
+      console.log("✅ Database initialized.");
+      return;
+    } catch (error) {
+      console.error(`⚠️ DB init attempt ${attempt}/${maxAttempts} failed.`);
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  console.error("❌ Database initialization failed after retries. API will stay up but DB endpoints may fail until DB is reachable.");
 }
 
 async function startServer() {
@@ -72,12 +93,17 @@ async function startServer() {
 
   // ─── API Routes ────────────────────────────────────────────────────────────
 
+  app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok", dbReady });
+  });
+
   app.get("/api/products", async (req, res) => {
     try {
       const result = await pool.query("SELECT * FROM products ORDER BY id ASC");
       res.json(result.rows);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch products" });
+      console.error("⚠️ /api/products DB error, returning fallback products.", error);
+      res.json(DEFAULT_PRODUCTS);
     }
   });
 
@@ -164,9 +190,9 @@ async function startServer() {
 }
 
 // Init DB then start server
-initDB()
-  .then(startServer)
+startServer()
+  .then(() => initializeDatabaseWithRetry())
   .catch((err) => {
-    console.error("❌ Failed to initialize database:", err);
+    console.error("❌ Failed to start server:", err);
     process.exit(1);
   });
