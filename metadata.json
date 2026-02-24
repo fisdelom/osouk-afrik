@@ -1,0 +1,5 @@
+{
+  "name": "Osouk d'Afrik - Saveurs d'Afrique au Maroc",
+  "description": "Boutique en ligne de produits africains authentiques (Attiéké, Igname, Plantains) basée à Casablanca, livraison dans tout le Maroc.",
+  "requestFramePermissions": ["geolocation"]
+}
