@@ -6,7 +6,7 @@
     },
     "deploy": {
         "startCommand": "NODE_ENV=production tsx server.ts",
-        "healthcheckPath": "/api/products",
+        "healthcheckPath": "/health",
         "restartPolicyType": "ON_FAILURE"
     }
 }
