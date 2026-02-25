@@ -34,6 +34,22 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
   next();
 }
 
+function parseRequiredNumber(value: unknown, fieldName: string) {
+  const normalized = typeof value === "string" ? value.replace(",", ".").trim() : value;
+  const num = Number(normalized);
+  if (!Number.isFinite(num)) {
+    throw new Error(`Invalid ${fieldName}`);
+  }
+  return num;
+}
+
+function parseOptionalNumber(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  const normalized = typeof value === "string" ? value.replace(",", ".").trim() : value;
+  const num = Number(normalized);
+  return Number.isFinite(num) ? num : null;
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL?.includes("railway") ? { rejectUnauthorized: false } : false,
@@ -161,24 +177,34 @@ async function startServer() {
   app.post("/api/products", requireAdmin, async (req, res) => {
     const { name, description, price, category, image, in_stock, promo_price } = req.body;
     try {
+      const parsedPrice = parseRequiredNumber(price, "price");
+      const parsedPromoPrice = parseOptionalNumber(promo_price);
       const result = await pool.query(
         "INSERT INTO products (name, description, price, category, image, in_stock, promo_price) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *",
-        [name, description, price, category, image, in_stock ? 1 : 0, promo_price || null]
+        [name, description, parsedPrice, category, image, in_stock ? 1 : 0, parsedPromoPrice]
       );
       const created = result.rows[0];
       fallbackProducts = [...fallbackProducts, created];
       res.json({ success: true, product: created });
     } catch (e) {
-      res.status(500).json({ error: "Error adding product" });
+      console.error("Error adding product:", e);
+      const message = e instanceof Error && e.message.startsWith("Invalid") ? e.message : "Error adding product";
+      res.status(message.startsWith("Invalid") ? 400 : 500).json({ error: message });
     }
   });
 
   app.put("/api/products/:id", requireAdmin, async (req, res) => {
     const { name, description, price, category, image, in_stock, promo_price } = req.body;
     try {
+      const parsedId = Number(req.params.id);
+      if (!Number.isInteger(parsedId)) {
+        return res.status(400).json({ error: "Invalid product id" });
+      }
+      const parsedPrice = parseRequiredNumber(price, "price");
+      const parsedPromoPrice = parseOptionalNumber(promo_price);
       const result = await pool.query(
         "UPDATE products SET name=$1, description=$2, price=$3, category=$4, image=$5, in_stock=$6, promo_price=$7 WHERE id=$8 RETURNING *",
-        [name, description, price, category, image, in_stock ? 1 : 0, promo_price || null, req.params.id]
+        [name, description, parsedPrice, category, image, in_stock ? 1 : 0, parsedPromoPrice, parsedId]
       );
       if (!result.rows[0]) {
         return res.status(404).json({ error: "Product not found" });
@@ -187,7 +213,9 @@ async function startServer() {
       fallbackProducts = fallbackProducts.map((p) => (p.id === updated.id ? updated : p));
       res.json({ success: true, product: updated });
     } catch (e) {
-      res.status(500).json({ error: "Error updating product" });
+      console.error("Error updating product:", e);
+      const message = e instanceof Error && e.message.startsWith("Invalid") ? e.message : "Error updating product";
+      res.status(message.startsWith("Invalid") ? 400 : 500).json({ error: message });
     }
   });
 
