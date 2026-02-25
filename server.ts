@@ -50,6 +50,11 @@ function parseOptionalNumber(value: unknown) {
   return Number.isFinite(num) ? num : null;
 }
 
+function isDatabaseConnectionError(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code: unknown }).code) : "";
+  return ["28P01", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "57P01"].includes(code);
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL?.includes("railway") ? { rejectUnauthorized: false } : false,
@@ -191,6 +196,21 @@ async function startServer() {
       res.json({ success: true, product: created });
     } catch (e) {
       console.error("Error adding product:", e);
+      if (isDatabaseConnectionError(e)) {
+        const nextId = fallbackProducts.length > 0 ? Math.max(...fallbackProducts.map((p) => Number(p.id) || 0)) + 1 : 1;
+        const fallbackCreated = {
+          id: nextId,
+          name,
+          description,
+          price: parseRequiredNumber(price, "price"),
+          category,
+          image,
+          in_stock: in_stock ? 1 : 0,
+          promo_price: parseOptionalNumber(promo_price),
+        };
+        fallbackProducts = [...fallbackProducts, fallbackCreated];
+        return res.json({ success: true, product: fallbackCreated, persisted: false });
+      }
       const dbMessage = typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : null;
       const message = e instanceof Error && e.message.startsWith("Invalid")
         ? e.message
@@ -220,6 +240,28 @@ async function startServer() {
       res.json({ success: true, product: updated });
     } catch (e) {
       console.error("Error updating product:", e);
+      if (isDatabaseConnectionError(e)) {
+        const parsedId = Number(req.params.id);
+        if (!Number.isInteger(parsedId)) {
+          return res.status(400).json({ error: "Invalid product id" });
+        }
+        const existing = fallbackProducts.find((p) => Number(p.id) === parsedId);
+        if (!existing) {
+          return res.status(404).json({ error: "Product not found" });
+        }
+        const fallbackUpdated = {
+          ...existing,
+          name,
+          description,
+          price: parseRequiredNumber(price, "price"),
+          category,
+          image,
+          in_stock: in_stock ? 1 : 0,
+          promo_price: parseOptionalNumber(promo_price),
+        };
+        fallbackProducts = fallbackProducts.map((p) => (Number(p.id) === parsedId ? fallbackUpdated : p));
+        return res.json({ success: true, product: fallbackUpdated, persisted: false });
+      }
       const dbMessage = typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : null;
       const message = e instanceof Error && e.message.startsWith("Invalid")
         ? e.message
@@ -235,6 +277,12 @@ async function startServer() {
       fallbackProducts = fallbackProducts.filter((p) => p.id !== deletedId);
       res.json({ success: true });
     } catch (e) {
+      console.error("Error deleting product:", e);
+      if (isDatabaseConnectionError(e)) {
+        const deletedId = Number(req.params.id);
+        fallbackProducts = fallbackProducts.filter((p) => Number(p.id) !== deletedId);
+        return res.json({ success: true, persisted: false });
+      }
       res.status(500).json({ error: "Error deleting product" });
     }
   });
