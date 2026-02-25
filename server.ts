@@ -15,6 +15,7 @@ const DEFAULT_PRODUCTS = [
   { id: 6, name: "Poisson Salé", description: "Poisson séché et salé pour vos bouillons.", price: 60, category: "Protéines", image: "https://images.unsplash.com/photo-1498654200943-1088dd4438ae?w=500&q=80", in_stock: 1, promo_price: null },
 ];
 
+let fallbackProducts = [...DEFAULT_PRODUCTS];
 
 // PostgreSQL connection pool (Railway injects DATABASE_URL automatically)
 
@@ -119,7 +120,7 @@ async function startServer() {
       res.json(result.rows);
     } catch (error) {
       console.error("⚠️ /api/products DB error, returning fallback products.", error);
-      res.json(DEFAULT_PRODUCTS);
+      res.json(fallbackProducts);
     }
   });
 
@@ -154,11 +155,13 @@ async function startServer() {
   app.post("/api/products", requireAdmin, async (req, res) => {
     const { name, description, price, category, image, in_stock, promo_price } = req.body;
     try {
-      await pool.query(
-        "INSERT INTO products (name, description, price, category, image, in_stock, promo_price) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+      const result = await pool.query(
+        "INSERT INTO products (name, description, price, category, image, in_stock, promo_price) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *",
         [name, description, price, category, image, in_stock ? 1 : 0, promo_price || null]
       );
-      res.json({ success: true });
+      const created = result.rows[0];
+      fallbackProducts = [...fallbackProducts, created];
+      res.json({ success: true, product: created });
     } catch (e) {
       res.status(500).json({ error: "Error adding product" });
     }
@@ -167,11 +170,16 @@ async function startServer() {
   app.put("/api/products/:id", requireAdmin, async (req, res) => {
     const { name, description, price, category, image, in_stock, promo_price } = req.body;
     try {
-      await pool.query(
-        "UPDATE products SET name=$1, description=$2, price=$3, category=$4, image=$5, in_stock=$6, promo_price=$7 WHERE id=$8",
+      const result = await pool.query(
+        "UPDATE products SET name=$1, description=$2, price=$3, category=$4, image=$5, in_stock=$6, promo_price=$7 WHERE id=$8 RETURNING *",
         [name, description, price, category, image, in_stock ? 1 : 0, promo_price || null, req.params.id]
       );
-      res.json({ success: true });
+      if (!result.rows[0]) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      const updated = result.rows[0];
+      fallbackProducts = fallbackProducts.map((p) => (p.id === updated.id ? updated : p));
+      res.json({ success: true, product: updated });
     } catch (e) {
       res.status(500).json({ error: "Error updating product" });
     }
@@ -179,7 +187,9 @@ async function startServer() {
 
   app.delete("/api/products/:id", requireAdmin, async (req, res) => {
     try {
+      const deletedId = Number(req.params.id);
       await pool.query("DELETE FROM products WHERE id=$1", [req.params.id]);
+      fallbackProducts = fallbackProducts.filter((p) => p.id !== deletedId);
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: "Error deleting product" });

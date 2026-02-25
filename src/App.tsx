@@ -8,6 +8,7 @@ function AdminPanel() {
   const [tokenInput, setTokenInput] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [productActionError, setProductActionError] = useState("");
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [view, setView] = useState<'orders' | 'products'>('orders');
@@ -38,6 +39,7 @@ function AdminPanel() {
 
   const handleProductSubmit = async (e: any) => {
     e.preventDefault();
+    setProductActionError("");
     const fd = new FormData(e.target);
     const in_stock = fd.get('in_stock') === 'on';
     const promo_price_raw = fd.get('promo_price');
@@ -48,20 +50,31 @@ function AdminPanel() {
       promo_price: promo_price_raw ? Number(promo_price_raw) : null
     };
 
-    if (editProduct && editProduct.id) {
-      await fetch(`/api/products/${editProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify(payload) });
-    } else {
-      await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify(payload) });
+    const res = editProduct && editProduct.id
+      ? await fetch(`/api/products/${editProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify(payload) })
+      : await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify(payload) });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setProductActionError(err.error || "Échec de l'enregistrement du produit.");
+      return;
     }
+
     setEditProduct(null);
-    fetchProducts();
+    await fetchProducts();
     e.target.reset();
   };
 
   const deleteProduct = async (id: number) => {
     if (window.confirm('Supprimer ce produit (CETTE ACTION EST DÉFINITIVE) ?')) {
-      await fetch(`/api/products/${id}`, { method: 'DELETE', headers: { 'x-admin-token': adminToken } });
-      fetchProducts();
+      setProductActionError("");
+      const res = await fetch(`/api/products/${id}`, { method: 'DELETE', headers: { 'x-admin-token': adminToken } });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setProductActionError(err.error || "Échec de la suppression du produit.");
+        return;
+      }
+      await fetchProducts();
     }
   };
 
