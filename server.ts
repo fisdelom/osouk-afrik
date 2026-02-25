@@ -17,6 +17,22 @@ const DEFAULT_PRODUCTS = [
 
 
 // PostgreSQL connection pool (Railway injects DATABASE_URL automatically)
+
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+
+function isAdminAuthorized(req: express.Request) {
+  if (!ADMIN_TOKEN) return true;
+  const provided = req.header("x-admin-token");
+  return provided === ADMIN_TOKEN;
+}
+
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!isAdminAuthorized(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL?.includes("railway") ? { rejectUnauthorized: false } : false,
@@ -107,7 +123,7 @@ async function startServer() {
     }
   });
 
-  app.get("/api/orders", async (req, res) => {
+  app.get("/api/orders", requireAdmin, async (req, res) => {
     try {
       const result = await pool.query("SELECT * FROM orders ORDER BY created_at DESC");
       res.json(result.rows);
@@ -135,7 +151,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/products", async (req, res) => {
+  app.post("/api/products", requireAdmin, async (req, res) => {
     const { name, description, price, category, image, in_stock, promo_price } = req.body;
     try {
       await pool.query(
@@ -148,7 +164,7 @@ async function startServer() {
     }
   });
 
-  app.put("/api/products/:id", async (req, res) => {
+  app.put("/api/products/:id", requireAdmin, async (req, res) => {
     const { name, description, price, category, image, in_stock, promo_price } = req.body;
     try {
       await pool.query(
@@ -161,7 +177,7 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/products/:id", async (req, res) => {
+  app.delete("/api/products/:id", requireAdmin, async (req, res) => {
     try {
       await pool.query("DELETE FROM products WHERE id=$1", [req.params.id]);
       res.json({ success: true });

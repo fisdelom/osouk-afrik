@@ -102,3 +102,10 @@ Si Railway continue de poser problème, utilise Render:
 5. Ajoute une base PostgreSQL Render (New + > PostgreSQL).
 6. Ajoute la variable `DATABASE_URL` du service PostgreSQL dans le Web Service.
 7. Déploie puis teste `https://TON-URL/health`.
+
+
+## Sécuriser la console admin (important)
+1. Dans Railway > Variables, ajoute `ADMIN_TOKEN` avec un mot de passe fort.
+2. Ouvre `https://TON-DOMAINE/#admin`.
+3. Entre le même `ADMIN_TOKEN` dans le formulaire de connexion admin.
+4. Tu pourras ensuite ajouter, modifier et supprimer les produits (prix, description, image).
