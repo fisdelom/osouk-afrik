@@ -89,6 +89,8 @@ async function initDB() {
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS promo_price NUMERIC`);
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS category TEXT`);
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS image TEXT`);
+  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'`);
+  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
 
   // Seed products if empty
   const countResult = await pool.query("SELECT COUNT(*) as count FROM products");
@@ -151,7 +153,8 @@ async function startServer() {
       const result = await pool.query("SELECT * FROM orders ORDER BY created_at DESC");
       res.json(result.rows);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch orders" });
+      console.error("Error fetching orders:", error);
+      res.json([]);
     }
   });
 
@@ -188,7 +191,10 @@ async function startServer() {
       res.json({ success: true, product: created });
     } catch (e) {
       console.error("Error adding product:", e);
-      const message = e instanceof Error && e.message.startsWith("Invalid") ? e.message : "Error adding product";
+      const dbMessage = typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : null;
+      const message = e instanceof Error && e.message.startsWith("Invalid")
+        ? e.message
+        : dbMessage || "Error adding product";
       res.status(message.startsWith("Invalid") ? 400 : 500).json({ error: message });
     }
   });
@@ -214,7 +220,10 @@ async function startServer() {
       res.json({ success: true, product: updated });
     } catch (e) {
       console.error("Error updating product:", e);
-      const message = e instanceof Error && e.message.startsWith("Invalid") ? e.message : "Error updating product";
+      const dbMessage = typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : null;
+      const message = e instanceof Error && e.message.startsWith("Invalid")
+        ? e.message
+        : dbMessage || "Error updating product";
       res.status(message.startsWith("Invalid") ? 400 : 500).json({ error: message });
     }
   });
