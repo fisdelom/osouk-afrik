@@ -4,15 +4,35 @@ import { ShoppingCart, ShoppingBag, X, Plus, Minus, MapPin, Phone, Instagram, Ch
 import { Product, CartItem, OrderData } from './types';
 
 function AdminPanel() {
+  const [adminToken, setAdminToken] = useState("");
+  const [tokenInput, setTokenInput] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState("");
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [view, setView] = useState<'orders' | 'products'>('orders');
   const [editProduct, setEditProduct] = useState<any>(null);
 
   useEffect(() => {
-    fetch('/api/orders').then(r => r.json()).then(d => setOrders(Array.isArray(d) ? d : [])).catch(() => setOrders([]));
+    const savedToken = localStorage.getItem('admin_token') || "";
+    if (savedToken) {
+      setAdminToken(savedToken);
+      setTokenInput(savedToken);
+      setIsAuthenticated(true);
+    }
     fetchProducts();
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch('/api/orders', { headers: { 'x-admin-token': adminToken } })
+      .then(async r => {
+        if (!r.ok) throw new Error('Unauthorized');
+        return r.json();
+      })
+      .then(d => setOrders(Array.isArray(d) ? d : []))
+      .catch(() => setOrders([]));
+  }, [isAuthenticated, adminToken]);
 
   const fetchProducts = () => fetch('/api/products').then(r => r.json()).then(d => setProducts(Array.isArray(d) ? d : [])).catch(() => setProducts([]));
 
@@ -29,9 +49,9 @@ function AdminPanel() {
     };
 
     if (editProduct && editProduct.id) {
-      await fetch(`/api/products/${editProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      await fetch(`/api/products/${editProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify(payload) });
     } else {
-      await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify(payload) });
     }
     setEditProduct(null);
     fetchProducts();
@@ -40,10 +60,52 @@ function AdminPanel() {
 
   const deleteProduct = async (id: number) => {
     if (window.confirm('Supprimer ce produit (CETTE ACTION EST DÉFINITIVE) ?')) {
-      await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      await fetch(`/api/products/${id}`, { method: 'DELETE', headers: { 'x-admin-token': adminToken } });
       fetchProducts();
     }
   };
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = tokenInput.trim();
+    if (!token) {
+      setAuthError("Veuillez entrer le code admin.");
+      return;
+    }
+    localStorage.setItem('admin_token', token);
+    setAdminToken(token);
+    setIsAuthenticated(true);
+    setAuthError("");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('admin_token');
+    setAdminToken("");
+    setTokenInput("");
+    setIsAuthenticated(false);
+    setOrders([]);
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <form onSubmit={handleAdminLogin} className="bg-white w-full max-w-md rounded-2xl shadow-xl p-8 border border-gray-100">
+          <h1 className="text-2xl font-serif text-brand-green mb-2">Connexion Admin</h1>
+          <p className="text-sm text-gray-500 mb-6">Entrez le code admin pour gérer les produits.</p>
+          <input
+            type="password"
+            value={tokenInput}
+            onChange={(e) => setTokenInput(e.target.value)}
+            placeholder="Code admin"
+            className="w-full border rounded-xl p-3 mb-3"
+          />
+          {authError && <p className="text-red-600 text-sm mb-3">{authError}</p>}
+          <button type="submit" className="w-full bg-brand-green text-white rounded-xl py-3 font-bold">Se connecter</button>
+          <a href="#" className="block text-center text-sm text-gray-500 mt-4 hover:text-brand-green">Retour Boutique</a>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 md:p-12">
@@ -56,7 +118,7 @@ function AdminPanel() {
               <button onClick={() => setView('products')} className={`font-bold px-4 py-1 rounded-full ${view === 'products' ? 'bg-brand-orange text-white' : 'bg-gray-200 text-gray-500'}`}>Produits ({products.length})</button>
             </div>
           </div>
-          <a href="#" className="bg-white text-brand-green px-6 py-2 rounded-full font-bold shadow hover:bg-gray-50 transition-colors border">Retour Boutique</a>
+          <div className="flex items-center gap-2"><button onClick={handleLogout} className="bg-red-50 text-red-600 px-4 py-2 rounded-full font-bold hover:bg-red-100 transition-colors border border-red-100">Déconnexion</button><a href="#" className="bg-white text-brand-green px-6 py-2 rounded-full font-bold shadow hover:bg-gray-50 transition-colors border">Retour Boutique</a></div>
         </div>
 
         {view === 'orders' ? (
@@ -243,6 +305,8 @@ export default function App() {
       setOrderStatus('error');
     }
   };
+
+  if (isAdmin) return <AdminPanel />;
 
   return (
     <div className="min-h-screen">
