@@ -164,6 +164,7 @@ function AdminPanel() {
           <div>
             <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 mb-8">
               <h2 className="text-2xl font-serif text-brand-green mb-6">{editProduct ? 'Modifier le Produit' : 'Ajouter un Nouveau Produit'}</h2>
+              {productActionError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm font-medium">{productActionError}</div>}
               <form onSubmit={handleProductSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4" key={editProduct ? editProduct.id : 'new'}>
                 <input name="name" defaultValue={editProduct?.name || ''} placeholder="Nom du produit" required className="p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-brand-green outline-none" />
                 <input name="category" defaultValue={editProduct?.category || 'Alimentation'} placeholder="Catégorie" required className="p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-brand-green outline-none" />
@@ -239,11 +240,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (isAdmin) return;
     fetch('/api/products')
       .then(res => res.json())
       .then(data => setProducts(Array.isArray(data) ? data : []))
       .catch(() => setProducts([]));
-  }, []);
+  }, [isAdmin]);
 
   const addToCart = (product: Product) => {
     setCart(prev => {

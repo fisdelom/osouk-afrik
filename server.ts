@@ -68,6 +68,12 @@ async function initDB() {
     );
   `);
 
+  // Backward-compatible migrations for existing databases
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS in_stock INTEGER DEFAULT 1`);
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS promo_price NUMERIC`);
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS category TEXT`);
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS image TEXT`);
+
   // Seed products if empty
   const countResult = await pool.query("SELECT COUNT(*) as count FROM products");
   const count = parseInt(countResult.rows[0].count, 10);
