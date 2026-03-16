@@ -4,20 +4,42 @@ import { ShoppingCart, ShoppingBag, X, Plus, Minus, MapPin, Phone, Instagram, Ch
 import { Product, CartItem, OrderData } from './types';
 
 function AdminPanel() {
+  const [adminToken, setAdminToken] = useState("");
+  const [tokenInput, setTokenInput] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [productActionError, setProductActionError] = useState("");
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [view, setView] = useState<'orders' | 'products'>('orders');
   const [editProduct, setEditProduct] = useState<any>(null);
 
   useEffect(() => {
-    fetch('/api/orders').then(r => r.json()).then(d => setOrders(Array.isArray(d) ? d : [])).catch(() => setOrders([]));
+    const savedToken = localStorage.getItem('admin_token') || "";
+    if (savedToken) {
+      setAdminToken(savedToken);
+      setTokenInput(savedToken);
+      setIsAuthenticated(true);
+    }
     fetchProducts();
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch('/api/orders', { headers: { 'x-admin-token': adminToken } })
+      .then(async r => {
+        if (!r.ok) throw new Error('Unauthorized');
+        return r.json();
+      })
+      .then(d => setOrders(Array.isArray(d) ? d : []))
+      .catch(() => setOrders([]));
+  }, [isAuthenticated, adminToken]);
 
   const fetchProducts = () => fetch('/api/products').then(r => r.json()).then(d => setProducts(Array.isArray(d) ? d : [])).catch(() => setProducts([]));
 
   const handleProductSubmit = async (e: any) => {
     e.preventDefault();
+    setProductActionError("");
     const fd = new FormData(e.target);
     const in_stock = fd.get('in_stock') === 'on';
     const promo_price_raw = fd.get('promo_price');
@@ -28,22 +50,75 @@ function AdminPanel() {
       promo_price: promo_price_raw ? Number(promo_price_raw) : null
     };
 
-    if (editProduct && editProduct.id) {
-      await fetch(`/api/products/${editProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    } else {
-      await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const res = editProduct && editProduct.id
+      ? await fetch(`/api/products/${editProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify(payload) })
+      : await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify(payload) });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setProductActionError(err.error || "Échec de l'enregistrement du produit.");
+      return;
     }
+
     setEditProduct(null);
-    fetchProducts();
+    await fetchProducts();
     e.target.reset();
   };
 
   const deleteProduct = async (id: number) => {
     if (window.confirm('Supprimer ce produit (CETTE ACTION EST DÉFINITIVE) ?')) {
-      await fetch(`/api/products/${id}`, { method: 'DELETE' });
-      fetchProducts();
+      setProductActionError("");
+      const res = await fetch(`/api/products/${id}`, { method: 'DELETE', headers: { 'x-admin-token': adminToken } });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setProductActionError(err.error || "Échec de la suppression du produit.");
+        return;
+      }
+      await fetchProducts();
     }
   };
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = tokenInput.trim();
+    if (!token) {
+      setAuthError("Veuillez entrer le code admin.");
+      return;
+    }
+    localStorage.setItem('admin_token', token);
+    setAdminToken(token);
+    setIsAuthenticated(true);
+    setAuthError("");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('admin_token');
+    setAdminToken("");
+    setTokenInput("");
+    setIsAuthenticated(false);
+    setOrders([]);
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <form onSubmit={handleAdminLogin} className="bg-white w-full max-w-md rounded-2xl shadow-xl p-8 border border-gray-100">
+          <h1 className="text-2xl font-serif text-brand-green mb-2">Connexion Admin</h1>
+          <p className="text-sm text-gray-500 mb-6">Entrez le code admin pour gérer les produits.</p>
+          <input
+            type="password"
+            value={tokenInput}
+            onChange={(e) => setTokenInput(e.target.value)}
+            placeholder="Code admin"
+            className="w-full border rounded-xl p-3 mb-3"
+          />
+          {authError && <p className="text-red-600 text-sm mb-3">{authError}</p>}
+          <button type="submit" className="w-full bg-brand-green text-white rounded-xl py-3 font-bold">Se connecter</button>
+          <a href="#" className="block text-center text-sm text-gray-500 mt-4 hover:text-brand-green">Retour Boutique</a>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 md:p-12">
@@ -56,7 +131,7 @@ function AdminPanel() {
               <button onClick={() => setView('products')} className={`font-bold px-4 py-1 rounded-full ${view === 'products' ? 'bg-brand-orange text-white' : 'bg-gray-200 text-gray-500'}`}>Produits ({products.length})</button>
             </div>
           </div>
-          <a href="#" className="bg-white text-brand-green px-6 py-2 rounded-full font-bold shadow hover:bg-gray-50 transition-colors border">Retour Boutique</a>
+          <div className="flex items-center gap-2"><button onClick={handleLogout} className="bg-red-50 text-red-600 px-4 py-2 rounded-full font-bold hover:bg-red-100 transition-colors border border-red-100">Déconnexion</button><a href="#" className="bg-white text-brand-green px-6 py-2 rounded-full font-bold shadow hover:bg-gray-50 transition-colors border">Retour Boutique</a></div>
         </div>
 
         {view === 'orders' ? (
@@ -89,6 +164,7 @@ function AdminPanel() {
           <div>
             <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 mb-8">
               <h2 className="text-2xl font-serif text-brand-green mb-6">{editProduct ? 'Modifier le Produit' : 'Ajouter un Nouveau Produit'}</h2>
+              {productActionError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm font-medium">{productActionError}</div>}
               <form onSubmit={handleProductSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4" key={editProduct ? editProduct.id : 'new'}>
                 <input name="name" defaultValue={editProduct?.name || ''} placeholder="Nom du produit" required className="p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-brand-green outline-none" />
                 <input name="category" defaultValue={editProduct?.category || 'Alimentation'} placeholder="Catégorie" required className="p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-brand-green outline-none" />
@@ -164,11 +240,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (isAdmin) return;
     fetch('/api/products')
       .then(res => res.json())
       .then(data => setProducts(Array.isArray(data) ? data : []))
       .catch(() => setProducts([]));
-  }, []);
+  }, [isAdmin]);
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -198,7 +275,7 @@ export default function App() {
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const generateWhatsAppLink = () => {
-    const baseUrl = "https://wa.me/212604285812";
+    const baseUrl = "https://wa.me/212612068285";
     if (cart.length === 0) return `${baseUrl}?text=${encodeURIComponent("Bonjour Osouk d'Afrik, je souhaite passer une commande.")}`;
     let text = "Bonjour Osouk d'Afrik, je souhaite passer cette commande :\n\n";
     cart.forEach(item => {
@@ -243,6 +320,8 @@ export default function App() {
       setOrderStatus('error');
     }
   };
+
+  if (isAdmin) return <AdminPanel />;
 
   return (
     <div className="min-h-screen">
@@ -330,7 +409,7 @@ export default function App() {
       <main id="produits" className="max-w-7xl mx-auto px-6 py-24">
         <div className="flex justify-between items-end mb-12">
           <div>
-            <h3 className="text-4xl font-serif text-brand-green mb-2">Nos Incontournables</h3>
+            <h3 className="text-4xl font-serif text-brand-green mb-2">Nos incontournables du moment</h3>
             <p className="text-brand-earth/60">Sélectionnés avec soin pour leur fraîcheur et leur goût.</p>
           </div>
         </div>
@@ -411,13 +490,51 @@ export default function App() {
               <Phone className="w-8 h-8 text-brand-orange" />
             </div>
             <h4 className="text-xl mb-2">Support 24/7</h4>
-            <p className="text-white/70">Une question ? <a href="https://wa.me/212604285812" target="_blank" rel="noopener noreferrer" className="underline hover:text-brand-orange">Contactez-nous sur WhatsApp au +212 604-285812</a> ou sur Instagram.</p>
+            <p className="text-white/70">Une question ? <a href="https://wa.me/212612068285" target="_blank" rel="noopener noreferrer" className="underline hover:text-brand-orange">Contactez-nous sur WhatsApp au +212 612-068285</a> ou sur Instagram.</p>
+          </div>
+        </div>
+      </section>
+
+
+      {/* À Propos */}
+      <section id="contact" className="bg-brand-cream py-20 border-t border-brand-green/10">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div>
+            <h3 className="text-4xl font-serif text-brand-green mb-6">À Propos de O'Souk d'Afrik</h3>
+            <p className="text-brand-earth/80 mb-4">O'Souk signifie "Au Marché" en langue Darija, le dialecte parlé au Maroc. En un mot, O'Souk d'Afrik est tout simplement "Au marché Africain".</p>
+            <p className="text-brand-earth/80 mb-6">Né en Septembre 2025 à Casablanca, O'Souk d'Afrik vous permet d'explorer la richesse culinaire de l’Afrique. Une sélection rigoureuse de produits alimentaires authentiques pour réinventer vos repas et faire voyager vos sens, chez vous, facilement.</p>
+
+            <h4 className="text-2xl font-serif text-brand-green mb-3">Pourquoi nous choisir</h4>
+            <ul className="list-disc pl-5 space-y-2 text-brand-earth/80 mb-8">
+              <li>Qualité et authenticité garanties: des produits soigneusement choisis pour leur goût et leur traçabilité.</li>
+              <li>Des classiques emblématiques: attiéké, banane plantain, igname, gari, fonio, pâte d’arachide, gombo, saka saka, et bien d’autres trésors.</li>
+              <li>Accessible à tous: conçu pour les communautés à l’étranger vivant au Maroc et les gourmets curieux de la gastronomie africaine.</li>
+              <li>Facilité d’achat: navigation simple, livraison rapide, et conseils pour cuisiner les plats phares.</li>
+            </ul>
+
+            <h4 className="text-2xl font-serif text-brand-green mb-3">Nos engagements</h4>
+            <ul className="list-disc pl-5 space-y-2 text-brand-earth/80">
+              <li>Qualité et traçabilité</li>
+              <li>Commerce équitable et soutien aux producteurs</li>
+              <li>Satisfaction client</li>
+            </ul>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-brand-green/10 shadow-sm p-8 h-fit">
+            <h4 className="text-2xl font-serif text-brand-green mb-4">Nos incontournables du moment</h4>
+            <ul className="space-y-3 text-brand-earth/80">
+              <li>• Attiéké authentique</li>
+              <li>• Banane Plantain Exotique</li>
+              <li>• Gari fin premium</li>
+              <li>• Fonio nutritif</li>
+              <li>• Pâte d’arachide raffinée</li>
+            </ul>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer id="contact" className="bg-brand-cream border-t border-brand-green/10 py-12 relative overflow-hidden">
+      <footer id="footer" className="bg-brand-cream border-t border-brand-green/10 py-12 relative overflow-hidden">
         <a href="#admin" className="absolute bottom-4 right-4 text-xs text-brand-green/30 hover:text-brand-green transition-colors">Console Administrateur</a>
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8 relative z-10">
           <div className="flex items-center gap-2">
@@ -425,15 +542,18 @@ export default function App() {
             <span className="text-xl font-bold text-brand-green">Osouk d'Afrik</span>
           </div>
           <div className="flex items-center gap-6">
-            <a href="https://wa.me/212604285812" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-brand-green hover:text-brand-orange transition-colors font-semibold">
+            <a href="https://wa.me/212612068285" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-brand-green hover:text-brand-orange transition-colors font-semibold">
               <Phone className="w-5 h-5" />
-              +212 604-285812
+              +212 612-068285
             </a>
             <a href="https://www.instagram.com/osoukdafrik/" target="_blank" className="hover:text-brand-orange transition-colors">
               <Instagram className="w-6 h-6" />
             </a>
           </div>
-          <p className="text-sm text-brand-earth/60">© 2024 Osouk d'Afrik. Tous droits réservés. Casablanca, Maroc.</p>
+          <div className="text-center md:text-right">
+            <p className="text-sm text-brand-earth/80 font-medium">O'Souk d'Afrik — Découvrez l’authenticité de l'Afrique et des saveurs africaines et ramenez les plaisirs de la cuisine traditionnelle dans votre foyer.</p>
+            <p className="text-sm text-brand-earth/60 mt-2">© 2024 Osouk d'Afrik. Tous droits réservés. Casablanca, Maroc.</p>
+          </div>
         </div>
       </footer>
 
