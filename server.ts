@@ -50,9 +50,42 @@ function parseOptionalNumber(value: unknown) {
   return Number.isFinite(num) ? num : null;
 }
 
+function getDbErrorCode(error: unknown) {
+  return typeof error === "object" && error && "code" in error ? String((error as { code: unknown }).code) : "";
+}
+
 function isDatabaseConnectionError(error: unknown) {
-  const code = typeof error === "object" && error && "code" in error ? String((error as { code: unknown }).code) : "";
-  return ["28P01", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "57P01"].includes(code);
+  const code = getDbErrorCode(error);
+  return ["28P01", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "57P01", "57P03"].includes(code);
+}
+
+function isRetryableDatabaseError(error: unknown) {
+  const code = getDbErrorCode(error);
+  return ["ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "57P01", "57P03", "53300"].includes(code);
+}
+
+function getDatabaseUnavailableMessage(error: unknown) {
+  const code = getDbErrorCode(error);
+  if (code === "28P01") {
+    return "Database authentication failed. Please verify DATABASE_URL credentials.";
+  }
+  return "Database unavailable. No change saved.";
+}
+
+async function runQueryWithRetry<T = unknown>(query: string, values: unknown[], attempts = 3): Promise<T> {
+  let lastError: unknown = null;
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      return await pool.query(query, values) as T;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableDatabaseError(error) || i === attempts) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+  }
+  throw lastError;
 }
 
 const pool = new Pool({
@@ -198,7 +231,7 @@ async function startServer() {
     try {
       const parsedPrice = parseRequiredNumber(price, "price");
       const parsedPromoPrice = parseOptionalNumber(promo_price);
-      const result = await pool.query(
+      const result = await runQueryWithRetry<{ rows: any[] }>(
         "INSERT INTO products (name, description, price, category, image, in_stock, promo_price) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *",
         [name, description, parsedPrice, category, image, in_stock ? 1 : 0, parsedPromoPrice]
       );
@@ -208,7 +241,7 @@ async function startServer() {
     } catch (e) {
       console.error("Error adding product:", e);
       if (isDatabaseConnectionError(e)) {
-        return res.status(503).json({ error: "Database unavailable. No change saved." });
+        return res.status(503).json({ error: getDatabaseUnavailableMessage(e) });
       }
       const dbMessage = typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : null;
       const message = e instanceof Error && e.message.startsWith("Invalid")
@@ -227,7 +260,7 @@ async function startServer() {
       }
       const parsedPrice = parseRequiredNumber(price, "price");
       const parsedPromoPrice = parseOptionalNumber(promo_price);
-      const result = await pool.query(
+      const result = await runQueryWithRetry<{ rows: any[] }>(
         "UPDATE products SET name=$1, description=$2, price=$3, category=$4, image=$5, in_stock=$6, promo_price=$7 WHERE id=$8 RETURNING *",
         [name, description, parsedPrice, category, image, in_stock ? 1 : 0, parsedPromoPrice, parsedId]
       );
@@ -240,7 +273,7 @@ async function startServer() {
     } catch (e) {
       console.error("Error updating product:", e);
       if (isDatabaseConnectionError(e)) {
-        return res.status(503).json({ error: "Database unavailable. No change saved." });
+        return res.status(503).json({ error: getDatabaseUnavailableMessage(e) });
       }
       const dbMessage = typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : null;
       const message = e instanceof Error && e.message.startsWith("Invalid")
@@ -253,7 +286,7 @@ async function startServer() {
   app.delete("/api/products/:id", requireAdmin, async (req, res) => {
     try {
       const deletedId = Number(req.params.id);
-      await pool.query("DELETE FROM products WHERE id=$1", [req.params.id]);
+      await runQueryWithRetry("DELETE FROM products WHERE id=$1", [req.params.id]);
       fallbackProducts = fallbackProducts.filter((p) => p.id !== deletedId);
       res.json({ success: true });
     } catch (e) {
