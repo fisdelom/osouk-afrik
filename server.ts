@@ -114,11 +114,22 @@ async function initDB() {
 
 let dbReady = false;
 
+
+async function syncFallbackProductsFromDatabase() {
+  try {
+    const result = await pool.query("SELECT * FROM products ORDER BY id ASC");
+    fallbackProducts = result.rows;
+  } catch (error) {
+    console.error("⚠️ Could not sync fallback products from DB:", error);
+  }
+}
+
 async function initializeDatabaseWithRetry(maxAttempts = 8, delayMs = 5000) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       await initDB();
       dbReady = true;
+      await syncFallbackProductsFromDatabase();
       console.log("✅ Database initialized.");
       return;
     } catch (error) {
@@ -197,19 +208,7 @@ async function startServer() {
     } catch (e) {
       console.error("Error adding product:", e);
       if (isDatabaseConnectionError(e)) {
-        const nextId = fallbackProducts.length > 0 ? Math.max(...fallbackProducts.map((p) => Number(p.id) || 0)) + 1 : 1;
-        const fallbackCreated = {
-          id: nextId,
-          name,
-          description,
-          price: parseRequiredNumber(price, "price"),
-          category,
-          image,
-          in_stock: in_stock ? 1 : 0,
-          promo_price: parseOptionalNumber(promo_price),
-        };
-        fallbackProducts = [...fallbackProducts, fallbackCreated];
-        return res.json({ success: true, product: fallbackCreated, persisted: false });
+        return res.status(503).json({ error: "Database unavailable. No change saved." });
       }
       const dbMessage = typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : null;
       const message = e instanceof Error && e.message.startsWith("Invalid")
@@ -241,26 +240,7 @@ async function startServer() {
     } catch (e) {
       console.error("Error updating product:", e);
       if (isDatabaseConnectionError(e)) {
-        const parsedId = Number(req.params.id);
-        if (!Number.isInteger(parsedId)) {
-          return res.status(400).json({ error: "Invalid product id" });
-        }
-        const existing = fallbackProducts.find((p) => Number(p.id) === parsedId);
-        if (!existing) {
-          return res.status(404).json({ error: "Product not found" });
-        }
-        const fallbackUpdated = {
-          ...existing,
-          name,
-          description,
-          price: parseRequiredNumber(price, "price"),
-          category,
-          image,
-          in_stock: in_stock ? 1 : 0,
-          promo_price: parseOptionalNumber(promo_price),
-        };
-        fallbackProducts = fallbackProducts.map((p) => (Number(p.id) === parsedId ? fallbackUpdated : p));
-        return res.json({ success: true, product: fallbackUpdated, persisted: false });
+        return res.status(503).json({ error: "Database unavailable. No change saved." });
       }
       const dbMessage = typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : null;
       const message = e instanceof Error && e.message.startsWith("Invalid")
@@ -279,9 +259,7 @@ async function startServer() {
     } catch (e) {
       console.error("Error deleting product:", e);
       if (isDatabaseConnectionError(e)) {
-        const deletedId = Number(req.params.id);
-        fallbackProducts = fallbackProducts.filter((p) => Number(p.id) !== deletedId);
-        return res.json({ success: true, persisted: false });
+        return res.status(503).json({ error: "Database unavailable. No deletion performed." });
       }
       res.status(500).json({ error: "Error deleting product" });
     }
