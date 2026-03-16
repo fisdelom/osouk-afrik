@@ -275,7 +275,7 @@ export default function App() {
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const generateWhatsAppLink = () => {
-    const baseUrl = "https://wa.me/212604285812";
+    const baseUrl = "https://wa.me/212612068285";
     if (cart.length === 0) return `${baseUrl}?text=${encodeURIComponent("Bonjour Osouk d'Afrik, je souhaite passer une commande.")}`;
     let text = "Bonjour Osouk d'Afrik, je souhaite passer cette commande :\n\n";
     cart.forEach(item => {
@@ -409,7 +409,7 @@ export default function App() {
       <main id="produits" className="max-w-7xl mx-auto px-6 py-24">
         <div className="flex justify-between items-end mb-12">
           <div>
-            <h3 className="text-4xl font-serif text-brand-green mb-2">Nos Incontournables</h3>
+            <h3 className="text-4xl font-serif text-brand-green mb-2">Nos incontournables du moment</h3>
             <p className="text-brand-earth/60">Sélectionnés avec soin pour leur fraîcheur et leur goût.</p>
           </div>
         </div>
@@ -490,13 +490,51 @@ export default function App() {
               <Phone className="w-8 h-8 text-brand-orange" />
             </div>
             <h4 className="text-xl mb-2">Support 24/7</h4>
-            <p className="text-white/70">Une question ? <a href="https://wa.me/212604285812" target="_blank" rel="noopener noreferrer" className="underline hover:text-brand-orange">Contactez-nous sur WhatsApp au +212 604-285812</a> ou sur Instagram.</p>
+            <p className="text-white/70">Une question ? <a href="https://wa.me/212612068285" target="_blank" rel="noopener noreferrer" className="underline hover:text-brand-orange">Contactez-nous sur WhatsApp au +212 612-068285</a> ou sur Instagram.</p>
+          </div>
+        </div>
+      </section>
+
+
+      {/* À Propos */}
+      <section id="contact" className="bg-brand-cream py-20 border-t border-brand-green/10">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div>
+            <h3 className="text-4xl font-serif text-brand-green mb-6">À Propos de O'Souk d'Afrik</h3>
+            <p className="text-brand-earth/80 mb-4">O'Souk signifie "Au Marché" en langue Darija, le dialecte parlé au Maroc. En un mot, O'Souk d'Afrik est tout simplement "Au marché Africain".</p>
+            <p className="text-brand-earth/80 mb-6">Né en Septembre 2025 à Casablanca, O'Souk d'Afrik vous permet d'explorer la richesse culinaire de l’Afrique. Une sélection rigoureuse de produits alimentaires authentiques pour réinventer vos repas et faire voyager vos sens, chez vous, facilement.</p>
+
+            <h4 className="text-2xl font-serif text-brand-green mb-3">Pourquoi nous choisir</h4>
+            <ul className="list-disc pl-5 space-y-2 text-brand-earth/80 mb-8">
+              <li>Qualité et authenticité garanties: des produits soigneusement choisis pour leur goût et leur traçabilité.</li>
+              <li>Des classiques emblématiques: attiéké, banane plantain, igname, gari, fonio, pâte d’arachide, gombo, saka saka, et bien d’autres trésors.</li>
+              <li>Accessible à tous: conçu pour les communautés à l’étranger vivant au Maroc et les gourmets curieux de la gastronomie africaine.</li>
+              <li>Facilité d’achat: navigation simple, livraison rapide, et conseils pour cuisiner les plats phares.</li>
+            </ul>
+
+            <h4 className="text-2xl font-serif text-brand-green mb-3">Nos engagements</h4>
+            <ul className="list-disc pl-5 space-y-2 text-brand-earth/80">
+              <li>Qualité et traçabilité</li>
+              <li>Commerce équitable et soutien aux producteurs</li>
+              <li>Satisfaction client</li>
+            </ul>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-brand-green/10 shadow-sm p-8 h-fit">
+            <h4 className="text-2xl font-serif text-brand-green mb-4">Nos incontournables du moment</h4>
+            <ul className="space-y-3 text-brand-earth/80">
+              <li>• Attiéké authentique</li>
+              <li>• Banane Plantain Exotique</li>
+              <li>• Gari fin premium</li>
+              <li>• Fonio nutritif</li>
+              <li>• Pâte d’arachide raffinée</li>
+            </ul>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer id="contact" className="bg-brand-cream border-t border-brand-green/10 py-12 relative overflow-hidden">
+      <footer id="footer" className="bg-brand-cream border-t border-brand-green/10 py-12 relative overflow-hidden">
         <a href="#admin" className="absolute bottom-4 right-4 text-xs text-brand-green/30 hover:text-brand-green transition-colors">Console Administrateur</a>
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8 relative z-10">
           <div className="flex items-center gap-2">
@@ -504,15 +542,18 @@ export default function App() {
             <span className="text-xl font-bold text-brand-green">Osouk d'Afrik</span>
           </div>
           <div className="flex items-center gap-6">
-            <a href="https://wa.me/212604285812" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-brand-green hover:text-brand-orange transition-colors font-semibold">
+            <a href="https://wa.me/212612068285" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-brand-green hover:text-brand-orange transition-colors font-semibold">
               <Phone className="w-5 h-5" />
-              +212 604-285812
+              +212 612-068285
             </a>
             <a href="https://www.instagram.com/osoukdafrik/" target="_blank" className="hover:text-brand-orange transition-colors">
               <Instagram className="w-6 h-6" />
             </a>
           </div>
-          <p className="text-sm text-brand-earth/60">© 2024 Osouk d'Afrik. Tous droits réservés. Casablanca, Maroc.</p>
+          <div className="text-center md:text-right">
+            <p className="text-sm text-brand-earth/80 font-medium">O'Souk d'Afrik — Découvrez l’authenticité de l'Afrique et des saveurs africaines et ramenez les plaisirs de la cuisine traditionnelle dans votre foyer.</p>
+            <p className="text-sm text-brand-earth/60 mt-2">© 2024 Osouk d'Afrik. Tous droits réservés. Casablanca, Maroc.</p>
+          </div>
         </div>
       </footer>
 
