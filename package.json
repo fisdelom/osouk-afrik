@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "start": "NODE_ENV=production tsx server.ts"
+    "start": "NODE_ENV=production tsx server.ts",
+    "deploy:check": "node scripts/check-deploy-readiness.mjs",
+    "railway:setup": "node scripts/setup-railway-cli.mjs",
+    "deploy:railway": "node scripts/deploy-railway.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
