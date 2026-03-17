@@ -6,6 +6,34 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+
+function resolveDatabaseUrl() {
+  const raw = process.env.DATABASE_URL?.trim();
+  const hasTemplatePlaceholder = !!raw && raw.includes("${{");
+
+  if (raw && !hasTemplatePlaceholder) {
+    return { connectionString: raw, source: "DATABASE_URL" };
+  }
+
+  const host = process.env.PGHOST || process.env.POSTGRES_HOST;
+  const port = process.env.PGPORT || process.env.POSTGRES_PORT || "5432";
+  const user = process.env.PGUSER || process.env.POSTGRES_USER;
+  const password = process.env.PGPASSWORD || process.env.POSTGRES_PASSWORD;
+  const database = process.env.PGDATABASE || process.env.POSTGRES_DB || "postgres";
+
+  if (host && user && password) {
+    const encodedPassword = encodeURIComponent(password);
+    const fallbackUrl = `postgresql://${user}:${encodedPassword}@${host}:${port}/${database}`;
+    return { connectionString: fallbackUrl, source: "PG* variables" };
+  }
+
+  return { connectionString: raw || "", source: "missing" };
+}
+
+const resolvedDb = resolveDatabaseUrl();
+const dbConnectionString = resolvedDb.connectionString;
+let dbLastError: string | null = null;
+
 const DEFAULT_PRODUCTS = [
   { id: 1, name: "Attiéké Frais", description: "Semoule de manioc fermentée, spécialité ivoirienne.", price: 25, category: "Féculents", image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80", in_stock: 1, promo_price: null },
   { id: 2, name: "Igname", description: "Igname de qualité supérieure, idéal pour vos plats.", price: 35, category: "Légumes", image: "https://images.unsplash.com/photo-1595856461939-2fe8b6951214?w=500&q=80", in_stock: 1, promo_price: null },
@@ -89,9 +117,14 @@ async function runQueryWithRetry<T = unknown>(query: string, values: unknown[], 
 }
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("railway") ? { rejectUnauthorized: false } : false,
+  connectionString: dbConnectionString,
+  ssl: dbConnectionString.includes("railway") ? { rejectUnauthorized: false } : false,
 });
+
+console.log(`🧩 DB connection source: ${resolvedDb.source}`);
+if (!dbConnectionString) {
+  console.error("❌ DATABASE_URL/PG variables are missing. DB-dependent admin saves cannot work.");
+}
 
 // Initialize Database Tables
 async function initDB() {
@@ -162,10 +195,13 @@ async function initializeDatabaseWithRetry(maxAttempts = 8, delayMs = 5000) {
     try {
       await initDB();
       dbReady = true;
+      dbLastError = null;
       await syncFallbackProductsFromDatabase();
       console.log("✅ Database initialized.");
       return;
     } catch (error) {
+      const code = getDbErrorCode(error);
+      dbLastError = code || (error instanceof Error ? error.message : "unknown");
       console.error(`⚠️ DB init attempt ${attempt}/${maxAttempts} failed.`);
       if (attempt < maxAttempts) {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -184,7 +220,7 @@ async function startServer() {
   // ─── API Routes ────────────────────────────────────────────────────────────
 
   app.get("/health", (req, res) => {
-    res.status(200).json({ status: "ok", dbReady });
+    res.status(200).json({ status: "ok", dbReady, dbSource: resolvedDb.source, dbLastError });
   });
 
   app.get("/api/products", async (req, res) => {

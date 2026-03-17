@@ -109,3 +109,14 @@ Si Railway continue de poser problème, utilise Render:
 2. Ouvre `https://TON-DOMAINE/#admin`.
 3. Entre le même `ADMIN_TOKEN` dans le formulaire de connexion admin.
 4. Tu pourras ensuite ajouter, modifier et supprimer les produits (prix, description, image).
+
+
+## Correction définitive DATABASE_URL (Railway)
+Si tu vois `Database authentication failed` dans l'admin:
+1. Dans le service Web Railway > Variables, mets exactement:
+   - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
+2. Supprime toute valeur manuelle de type `postgresql://postgres:...@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}...`
+3. Redéploie le service.
+4. Vérifie `GET /health` puis reteste la modification de produit dans `#admin`.
+
+Le backend supporte aussi automatiquement les variables `PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE` si `DATABASE_URL` est absente ou mal templatisée.
