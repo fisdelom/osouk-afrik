@@ -453,8 +453,8 @@ export default function App() {
         <a href="#admin" className="absolute bottom-4 right-4 text-xs text-brand-green/30 hover:text-brand-green transition-colors">Console Administrateur</a>
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8 relative z-10">
           <div className="flex items-center gap-2">
-            <ShoppingBag className="text-brand-green w-6 h-6" />
-            <span className="text-xl font-bold text-brand-green">Osouk d'Afrik</span>
+            <img src="/osouk-dafrik-logo.png" alt="Osouk d'Afrik — L'authenticité de l'Afrique chez vous" className="h-16 w-auto" />
+            <span className="sr-only">Osouk d'Afrik</span>
           </div>
           <div className="flex items-center gap-6">
             <a href="https://wa.me/212612068285" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-brand-green hover:text-brand-orange transition-colors font-semibold">
