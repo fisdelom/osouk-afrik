@@ -1,122 +1,59 @@
-# Déploiement Railway — Guide débutant (pas à pas)
+# Déployer Osouk d'Afrik gratuitement
 
-Ce guide est fait pour un profil **novice**. Suis les étapes dans l'ordre.
+Cette boutique est une application Node.js : le frontend React et l'API Express
+sont servis ensemble. Les commandes sont envoyées directement vers WhatsApp ; le
+site ne conserve donc aucune coordonnée client ni aucune commande dans sa base.
 
-✅ Les scripts npm fonctionnent sur **Windows / macOS / Linux** (plus besoin de bash).
+## Services recommandés
 
-## Étape 0 — Ce qu'il te faut
-- Un compte Railway: https://railway.app
-- Ce repo sur GitHub (ou en local)
-- Node.js installé sur ta machine
+- **Render** : héberge le site et l'API Express sur un Web Service gratuit.
+- **Neon** : héberge le catalogue dans une base PostgreSQL gratuite et persistante.
 
-## Étape 1 — Installer Railway CLI
-Dans le terminal, à la racine du projet:
+Render met le service gratuit en veille après une période d'inactivité. Le
+premier chargement suivant peut être plus lent. Neon reste la source de vérité
+pour les produits : ne pas utiliser le disque local de Render pour les données.
 
-```bash
-npm run railway:setup
-```
+## 1. Créer la base Neon
 
-Si ça échoue, fais:
+1. Crée un projet gratuit sur https://neon.com.
+2. Copie la chaîne de connexion PostgreSQL fournie par Neon (elle contient
+   généralement `sslmode=require`).
+3. Ne publie jamais cette valeur dans GitHub.
 
-```bash
-npm install -g @railway/cli
-railway --version
-```
+## 2. Créer le Web Service Render
 
-## Étape 2 — Vérifier que le projet build correctement
+1. Connecte GitHub à https://render.com puis choisis **New > Web Service**.
+2. Sélectionne le dépôt `fisdelom/osouk-afrik`.
+3. Choisis la branche à publier et renseigne :
 
-```bash
-npm run deploy:check
-```
+   - **Build Command** : `npm install && npm run build`
+   - **Start Command** : `npm start`
+   - **Health Check Path** : `/health`
 
-Tu dois voir la fin: `✅ Readiness check terminé.`
+4. Dans **Environment**, ajoute :
 
-## Étape 3 — Se connecter à Railway
+   - `NODE_ENV=production`
+   - `DATABASE_URL` : la chaîne Neon complète
+   - `ADMIN_TOKEN` : un secret long, unique et impossible à deviner
 
-```bash
-railway login
-```
+Ne règle pas `DATABASE_SSL` : la valeur par défaut active TLS, requis par Neon.
 
-Une page web s'ouvre, tu confirmes la connexion.
+## 3. Vérifier après déploiement
 
-## Étape 4 — Créer/Lier ton projet Railway
+1. Ouvre `https://ton-domaine.onrender.com/health` : le statut doit être `ok`
+   et `dbReady` doit devenir `true` après l'initialisation.
+2. Ouvre la boutique et vérifie le catalogue.
+3. Ouvre `https://ton-domaine.onrender.com/#admin`, saisis `ADMIN_TOKEN`, puis
+   crée un produit de test et confirme qu'il reste visible après actualisation.
+4. Ajoute un article au panier et vérifie que le bouton WhatsApp contient le
+   produit, le prix promotionnel éventuel et le total correct.
 
-```bash
-railway link
-```
+## Administration
 
-- Si tu as déjà un projet Railway: sélectionne-le.
-- Sinon: crée un nouveau projet.
+Le back-office ne doit jamais être publié sans `ADMIN_TOKEN`. Le token est
+conservé dans le navigateur de l'administrateur pour éviter de le ressaisir ;
+déconnecte-toi après usage sur un appareil partagé.
 
-## Étape 5 — Ajouter PostgreSQL (obligatoire)
-Dans le dashboard Railway:
-1. Ouvre ton projet.
-2. `New` → `Database` → `PostgreSQL`.
-3. Attends qu'il soit "healthy".
-4. Vérifie que `DATABASE_URL` est bien injectée dans ton service web.
-
-## Étape 6 — Déployer
-
-```bash
-npm run deploy:railway
-```
-
-Le script fait automatiquement:
-- la vérification `deploy:check`,
-- la vérification login Railway,
-- le link projet si besoin,
-- le `railway up`.
-
-## Étape 7 — Obtenir et tester le lien final
-
-```bash
-railway domain
-```
-
-Puis teste:
-- `https://TON-DOMAINE/health`
-- La page d'accueil `https://TON-DOMAINE`
-
-## Résolution d'erreurs fréquentes
-- `DATABASE_URL non défini`:
-  - Assure-toi que PostgreSQL est ajouté au même projet Railway.
-- `railway: command not found`:
-  - Relance `npm run railway:setup` ou installe globalement avec npm.
-- `healthcheck failed`:
-  - Vérifie que `/health` répond (même si la DB démarre lentement).
-  - Ensuite vérifie `DATABASE_URL` et `/api/products`.
-
-## Config déjà présente dans le repo
-- Build: `npm install && npm run build`.
-- Start: `npm start`.
-- Healthcheck: `/health`.
-- Fichiers: `railway.toml`, `railway.json`.
-
-
-## Option B — Déployer ailleurs (Render)
-Si Railway continue de poser problème, utilise Render:
-1. Va sur https://render.com et connecte ton GitHub.
-2. New + > Web Service > choisis ce repo.
-3. Build Command: `npm install && npm run build`
-4. Start Command: `npm start`
-5. Ajoute une base PostgreSQL Render (New + > PostgreSQL).
-6. Ajoute la variable `DATABASE_URL` du service PostgreSQL dans le Web Service.
-7. Déploie puis teste `https://TON-URL/health`.
-
-
-## Sécuriser la console admin (important)
-1. Dans Railway > Variables, ajoute `ADMIN_TOKEN` avec un mot de passe fort.
-2. Ouvre `https://TON-DOMAINE/#admin`.
-3. Entre le même `ADMIN_TOKEN` dans le formulaire de connexion admin.
-4. Tu pourras ensuite ajouter, modifier et supprimer les produits (prix, description, image).
-
-
-## Correction définitive DATABASE_URL (Railway)
-Si tu vois `Database authentication failed` dans l'admin:
-1. Dans le service Web Railway > Variables, mets exactement:
-   - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
-2. Supprime toute valeur manuelle de type `postgresql://postgres:...@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}...`
-3. Redéploie le service.
-4. Vérifie `GET /health` puis reteste la modification de produit dans `#admin`.
-
-Le backend supporte aussi automatiquement les variables `PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE` si `DATABASE_URL` est absente ou mal templatisée.
+Les images de produits sont actuellement fournies sous forme d'URL HTTPS. Pour
+des images personnelles, héberge-les dans un service d'images puis colle leur
+URL dans le formulaire admin.

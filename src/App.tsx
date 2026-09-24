@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingCart, ShoppingBag, X, Plus, Minus, MapPin, Phone, Instagram, CheckCircle2, ChevronRight, Menu } from 'lucide-react';
-import { Product, CartItem, OrderData } from './types';
+import { Product, CartItem } from './types';
 
 function AdminPanel() {
   const [adminToken, setAdminToken] = useState("");
@@ -9,9 +9,7 @@ function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState("");
   const [productActionError, setProductActionError] = useState("");
-  const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
-  const [view, setView] = useState<'orders' | 'products'>('orders');
   const [editProduct, setEditProduct] = useState<any>(null);
 
   useEffect(() => {
@@ -23,17 +21,6 @@ function AdminPanel() {
     }
     fetchProducts();
   }, []);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    fetch('/api/orders', { headers: { 'x-admin-token': adminToken } })
-      .then(async r => {
-        if (!r.ok) throw new Error('Unauthorized');
-        return r.json();
-      })
-      .then(d => setOrders(Array.isArray(d) ? d : []))
-      .catch(() => setOrders([]));
-  }, [isAuthenticated, adminToken]);
 
   const fetchProducts = () => fetch('/api/products').then(r => r.json()).then(d => setProducts(Array.isArray(d) ? d : [])).catch(() => setProducts([]));
 
@@ -78,11 +65,16 @@ function AdminPanel() {
     }
   };
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = tokenInput.trim();
     if (!token) {
       setAuthError("Veuillez entrer le code admin.");
+      return;
+    }
+    const response = await fetch('/api/admin/session', { headers: { 'x-admin-token': token } });
+    if (!response.ok) {
+      setAuthError("Code admin incorrect ou console non configurée.");
       return;
     }
     localStorage.setItem('admin_token', token);
@@ -96,7 +88,6 @@ function AdminPanel() {
     setAdminToken("");
     setTokenInput("");
     setIsAuthenticated(false);
-    setOrders([]);
   };
 
   if (!isAuthenticated) {
@@ -126,42 +117,12 @@ function AdminPanel() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-serif text-brand-green mb-1">Console d'Administration</h1>
-            <div className="flex gap-4 mt-2">
-              <button onClick={() => setView('orders')} className={`font-bold px-4 py-1 rounded-full ${view === 'orders' ? 'bg-brand-orange text-white' : 'bg-gray-200 text-gray-500'}`}>Commandes ({orders.length})</button>
-              <button onClick={() => setView('products')} className={`font-bold px-4 py-1 rounded-full ${view === 'products' ? 'bg-brand-orange text-white' : 'bg-gray-200 text-gray-500'}`}>Produits ({products.length})</button>
-            </div>
+            <p className="text-sm text-gray-500 mt-2">Gérez le catalogue visible par les clients.</p>
           </div>
           <div className="flex items-center gap-2"><button onClick={handleLogout} className="bg-red-50 text-red-600 px-4 py-2 rounded-full font-bold hover:bg-red-100 transition-colors border border-red-100">Déconnexion</button><a href="#" className="bg-white text-brand-green px-6 py-2 rounded-full font-bold shadow hover:bg-gray-50 transition-colors border">Retour Boutique</a></div>
         </div>
 
-        {view === 'orders' ? (
-          <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[800px]">
-                <thead>
-                  <tr className="bg-brand-green/5 text-brand-green border-b border-brand-green/10">
-                    <th className="p-5 font-bold">Réf</th><th className="p-5 font-bold">Date</th><th className="p-5 font-bold">Client & Contact</th><th className="p-5 font-bold">Livraison</th><th className="p-5 font-bold">Articles</th><th className="p-5 font-bold">Total</th><th className="p-5 font-bold">Paiement</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {orders.map(o => (
-                    <tr key={o.id} className="hover:bg-brand-green/5 transition-colors">
-                      <td className="p-5 font-bold text-gray-700">#{o.id}</td>
-                      <td className="p-5 text-gray-600 font-medium">{new Date(o.created_at).toLocaleDateString()}<br /><span className="text-sm text-gray-400">{new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></td>
-                      <td className="p-5 font-bold text-gray-800">{o.customer_name}<div className="text-sm font-normal text-gray-500">{o.phone}</div><div className="text-sm font-normal text-gray-400">{o.email || '-'}</div></td>
-                      <td className="p-5 font-semibold text-gray-700">{o.city}<div className="text-sm font-normal text-gray-500 max-w-[200px] truncate" title={o.address}>{o.address}</div></td>
-                      <td className="p-5"><details className="text-sm group relative"><summary className="text-brand-orange font-bold cursor-pointer list-none select-none">Voir {JSON.parse(o.items || '[]').length} articles</summary><div className="mt-2 text-xs text-gray-600 bg-gray-50 p-2 rounded">{JSON.parse(o.items || '[]').map((item: any, i: number) => (<div key={i}>• {item.quantity}x {item.name}</div>))}</div></details></td>
-                      <td className="p-5 font-black text-brand-green">{o.total} DH</td>
-                      <td className="p-5"><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${o.payment_method === 'delivery_cash' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>{o.payment_method.replace('_', ' ')}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {orders.length === 0 && <div className="p-12 text-center text-gray-400">Aucune commande n'a encore été passée.</div>}
-          </div>
-        ) : (
-          <div>
+        <div>
             <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 mb-8">
               <h2 className="text-2xl font-serif text-brand-green mb-6">{editProduct ? 'Modifier le Produit' : 'Ajouter un Nouveau Produit'}</h2>
               {productActionError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm font-medium">{productActionError}</div>}
@@ -208,8 +169,7 @@ function AdminPanel() {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -219,16 +179,6 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [orderStatus, setOrderStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: '',
-    city: 'Casablanca',
-    paymentMethod: 'delivery_cash' as 'delivery_cash' | 'credit_card' | 'paypal'
-  });
 
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -272,53 +222,18 @@ export default function App() {
     }));
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const getUnitPrice = (item: Product) => item.promo_price ?? item.price;
+  const cartTotal = cart.reduce((sum, item) => sum + getUnitPrice(item) * item.quantity, 0);
 
   const generateWhatsAppLink = () => {
     const baseUrl = "https://wa.me/212612068285";
     if (cart.length === 0) return `${baseUrl}?text=${encodeURIComponent("Bonjour Osouk d'Afrik, je souhaite passer une commande.")}`;
     let text = "Bonjour Osouk d'Afrik, je souhaite passer cette commande :\n\n";
     cart.forEach(item => {
-      text += `- ${item.quantity}x ${item.name} (${item.price * item.quantity} DH)\n`;
+      text += `- ${item.quantity}x ${item.name} (${getUnitPrice(item) * item.quantity} DH)\n`;
     });
     text += `\nTotal : ${cartTotal} DH\n\nMerci !`;
     return `${baseUrl}?text=${encodeURIComponent(text)}`;
-  };
-
-  const handleCheckout = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOrderStatus('loading');
-
-    const order: OrderData = {
-      customer_name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      address: formData.address,
-      city: formData.city,
-      total: cartTotal,
-      items: cart,
-      payment_method: formData.paymentMethod
-    };
-
-    try {
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(order)
-      });
-      if (res.ok) {
-        setOrderStatus('success');
-        setCart([]);
-        setTimeout(() => {
-          setIsCheckoutOpen(false);
-          setOrderStatus('idle');
-        }, 3000);
-      } else {
-        setOrderStatus('error');
-      }
-    } catch (err) {
-      setOrderStatus('error');
-    }
   };
 
   if (isAdmin) return <AdminPanel />;
@@ -629,133 +544,6 @@ export default function App() {
               )}
             </motion.div>
           </>
-        )}
-      </AnimatePresence>
-
-      {/* Checkout Modal */}
-      <AnimatePresence>
-        {isCheckoutOpen && (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsCheckoutOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-md"
-            />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl"
-            >
-              {orderStatus === 'success' ? (
-                <div className="p-12 text-center">
-                  <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <CheckCircle2 className="w-10 h-10" />
-                  </div>
-                  <h3 className="text-3xl font-serif mb-4">Commande Reçue !</h3>
-                  <p className="text-gray-600">Merci pour votre confiance. Nous vous contacterons sous peu pour confirmer la livraison.</p>
-                </div>
-              ) : (
-                <div className="flex flex-col md:flex-row">
-                  <div className="flex-1 p-8">
-                    <h3 className="text-2xl font-serif mb-6">Finaliser la commande</h3>
-                    <form onSubmit={handleCheckout} className="space-y-4">
-                      <input
-                        required
-                        type="text"
-                        placeholder="Nom complet"
-                        className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-brand-green outline-none"
-                        value={formData.name}
-                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                      />
-                      <div className="grid grid-cols-2 gap-4">
-                        <input
-                          required
-                          type="tel"
-                          placeholder="Téléphone"
-                          className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-brand-green outline-none"
-                          value={formData.phone}
-                          onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                        />
-                        <select
-                          className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-brand-green outline-none"
-                          value={formData.city}
-                          onChange={e => setFormData({ ...formData, city: e.target.value })}
-                        >
-                          <option value="Casablanca">Casablanca</option>
-                          <option value="Rabat">Rabat</option>
-                          <option value="Marrakech">Marrakech</option>
-                          <option value="Tanger">Tanger</option>
-                          <option value="Autre">Autre ville</option>
-                        </select>
-                      </div>
-                      <textarea
-                        required
-                        placeholder="Adresse de livraison"
-                        className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-brand-green outline-none h-24"
-                        value={formData.address}
-                        onChange={e => setFormData({ ...formData, address: e.target.value })}
-                      ></textarea>
-
-                      <div className="space-y-3">
-                        <p className="text-sm font-medium text-gray-700">Mode de paiement</p>
-                        <div className="flex flex-col gap-3">
-                          <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all ${formData.paymentMethod === 'delivery_cash' ? 'bg-brand-green/10 border-brand-green' : 'hover:bg-gray-50'}`}>
-                            <input type="radio" className="mr-3 w-4 h-4 accent-brand-green" name="payment" value="delivery_cash" checked={formData.paymentMethod === 'delivery_cash'} onChange={() => setFormData({ ...formData, paymentMethod: 'delivery_cash' })} />
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-gray-800">Paiement à la livraison</span>
-                              <span className="text-xs text-gray-500">Payer en espèces auprès du livreur</span>
-                            </div>
-                          </label>
-
-                          <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all ${formData.paymentMethod === 'credit_card' ? 'bg-brand-green/10 border-brand-green' : 'hover:bg-gray-50'}`}>
-                            <input type="radio" className="mr-3 w-4 h-4 accent-brand-green" name="payment" value="credit_card" checked={formData.paymentMethod === 'credit_card'} onChange={() => setFormData({ ...formData, paymentMethod: 'credit_card' })} />
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-gray-800">Carte de Crédit</span>
-                              <span className="text-xs text-gray-500">Paiement sécurisé en ligne</span>
-                            </div>
-                          </label>
-
-                          <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all ${formData.paymentMethod === 'paypal' ? 'bg-brand-green/10 border-brand-green' : 'hover:bg-gray-50'}`}>
-                            <input type="radio" className="mr-3 w-4 h-4 accent-brand-green" name="payment" value="paypal" checked={formData.paymentMethod === 'paypal'} onChange={() => setFormData({ ...formData, paymentMethod: 'paypal' })} />
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-gray-800">PayPal</span>
-                              <span className="text-xs text-gray-500">Être redirigé vers PayPal</span>
-                            </div>
-                          </label>
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={orderStatus === 'loading'}
-                        className="w-full btn-primary mt-4 disabled:opacity-50"
-                      >
-                        {orderStatus === 'loading' ? 'Traitement...' : `Confirmer (${cartTotal} DH)`}
-                      </button>
-                    </form>
-                  </div>
-                  <div className="w-full md:w-64 bg-gray-50 p-8 border-l">
-                    <h4 className="font-medium mb-4">Résumé</h4>
-                    <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-                      {cart.map(item => (
-                        <div key={item.id} className="flex justify-between text-sm">
-                          <span className="text-gray-600">{item.quantity}x {item.name}</span>
-                          <span className="font-medium">{item.price * item.quantity} DH</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-6 pt-6 border-t flex justify-between font-bold text-brand-green">
-                      <span>Total</span>
-                      <span>{cartTotal} DH</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          </div>
         )}
       </AnimatePresence>
 

@@ -1,4 +1,5 @@
 node_modules/
+/.npm-cache/
 build/
 dist/
 coverage/
@@ -9,3 +10,8 @@ coverage/
 *.db
 *.db-shm
 *.db-wal
+.neon
+/.neon-auth/
+/.neon-cache/
+/.neon-npm-cache/
+/.neon-cli/

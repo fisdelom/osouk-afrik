@@ -50,7 +50,9 @@ let fallbackProducts = [...DEFAULT_PRODUCTS];
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 
 function isAdminAuthorized(req: express.Request) {
-  if (!ADMIN_TOKEN) return true;
+  // Never leave the administration endpoints public when an environment
+  // variable was forgotten during deployment.
+  if (!ADMIN_TOKEN) return false;
   const provided = req.header("x-admin-token");
   return provided === ADMIN_TOKEN;
 }
@@ -118,12 +120,17 @@ async function runQueryWithRetry<T = unknown>(query: string, values: unknown[], 
 
 const pool = new Pool({
   connectionString: dbConnectionString,
-  ssl: dbConnectionString.includes("railway") ? { rejectUnauthorized: false } : false,
+  // Hosted PostgreSQL services such as Neon require TLS.  Local PostgreSQL can
+  // opt out explicitly with DATABASE_SSL=false in a local .env file.
+  ssl: process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false },
 });
 
 console.log(`🧩 DB connection source: ${resolvedDb.source}`);
 if (!dbConnectionString) {
   console.error("❌ DATABASE_URL/PG variables are missing. DB-dependent admin saves cannot work.");
+}
+if (!ADMIN_TOKEN) {
+  console.error("❌ ADMIN_TOKEN is missing. Product administration is disabled until it is configured.");
 }
 
 // Initialize Database Tables
@@ -140,19 +147,6 @@ async function initDB() {
       promo_price NUMERIC
     );
 
-    CREATE TABLE IF NOT EXISTS orders (
-      id SERIAL PRIMARY KEY,
-      customer_name TEXT NOT NULL,
-      email TEXT,
-      phone TEXT NOT NULL,
-      address TEXT NOT NULL,
-      city TEXT NOT NULL,
-      total NUMERIC NOT NULL,
-      items TEXT NOT NULL,
-      payment_method TEXT NOT NULL,
-      status TEXT DEFAULT 'pending',
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
   `);
 
   // Backward-compatible migrations for existing databases
@@ -160,8 +154,6 @@ async function initDB() {
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS promo_price NUMERIC`);
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS category TEXT`);
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS image TEXT`);
-  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'`);
-  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
 
   // Seed products if empty
   const countResult = await pool.query("SELECT COUNT(*) as count FROM products");
@@ -233,33 +225,8 @@ async function startServer() {
     }
   });
 
-  app.get("/api/orders", requireAdmin, async (req, res) => {
-    try {
-      const result = await pool.query("SELECT * FROM orders ORDER BY created_at DESC");
-      res.json(result.rows);
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-      res.json([]);
-    }
-  });
-
-  app.post("/api/orders", async (req, res) => {
-    const { customer_name, email, phone, address, city, total, items, payment_method } = req.body;
-    try {
-      const result = await pool.query(
-        `INSERT INTO orders (customer_name, email, phone, address, city, total, items, payment_method)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-        [customer_name, email, phone, address, city, total, JSON.stringify(items), payment_method]
-      );
-
-      console.log(`\n🔔 NOUVELLE COMMANDE REÇUE :`);
-      console.log(`Client: ${customer_name} | Tel: ${phone}`);
-      console.log(`Total: ${total} DH | Paiement: ${payment_method}\n`);
-
-      res.json({ success: true, orderId: result.rows[0].id });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to create order" });
-    }
+  app.get("/api/admin/session", requireAdmin, (req, res) => {
+    res.status(200).json({ authenticated: true });
   });
 
   app.post("/api/products", requireAdmin, async (req, res) => {

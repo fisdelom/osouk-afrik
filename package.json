@@ -9,13 +9,14 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "start": "NODE_ENV=production tsx server.ts",
+    "start": "tsx server.ts",
     "deploy:check": "node scripts/check-deploy-readiness.mjs",
     "railway:setup": "node scripts/setup-railway-cli.mjs",
     "deploy:railway": "node scripts/deploy-railway.mjs"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0",
+    "@neon/config": "^1.7.3",
+    "@neon/env": "^1.4.4",
     "@tailwindcss/vite": "^4.1.14",
     "@types/pg": "^8.16.0",
     "@vitejs/plugin-react": "^5.0.4",
