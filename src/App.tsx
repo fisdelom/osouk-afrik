@@ -244,8 +244,8 @@ export default function App() {
       <nav className="glass-nav sticky top-0 z-50 px-6 py-4">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <ShoppingBag className="text-brand-green w-8 h-8" />
-            <h1 className="text-2xl font-bold tracking-tight text-brand-green">Osouk d'Afrik</h1>
+            <img src="/osouk-dafrik-logo.png" alt="Osouk d'Afrik — L'authenticité de l'Afrique chez vous" className="h-14 w-auto sm:h-16" />
+            <span className="sr-only">Osouk d'Afrik</span>
           </div>
 
           <div className="hidden md:flex gap-8 text-sm font-medium uppercase tracking-widest">
